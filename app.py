@@ -1,173 +1,101 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
-st.set_page_config(page_title="CSV Visualizer", layout="wide")
-st.title("📊 CSV Data Visualizer and Comparator")
+st.set_page_config(layout="wide")
+st.title("📊 CSV Visualizer & Comparator")
 
-uploaded_file = st.file_uploader("📁 Upload Your Main CSV File", type="csv")
+st.markdown("### Upload the Main Dataset")
+main_file = st.file_uploader("Choose the main CSV file", type="csv")
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    st.markdown("### 👀 Data Preview:")
-    st.dataframe(df)
+compare_more = st.checkbox("Compare more datasets")
 
-    st.markdown("### 📈 Summary Statistics:")
-    st.write(df.describe())
+other_files = []
+if compare_more:
+    other_files = st.file_uploader("Upload other CSV files", type="csv", accept_multiple_files=True)
 
-    cols = df.columns.tolist()
-    if len(cols) >= 2:
-        x_col = cols[0]
-        y_col = cols[1]
+def show_dataset_ui(file, label):
+    st.markdown(f"## {label}")
+    try:
+        df = pd.read_csv(file)
+    except Exception as e:
+        st.error(f"Failed to read {label}: {e}")
+        return
 
+    st.write("### Dataset Preview", df.head())
+
+    cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if len(cols) < 1:
+        st.warning("No numeric columns to visualize.")
+        return
+
+    col1, col2 = st.columns(2)
+    with col1:
+        x_col = st.selectbox(f"Select X-axis (categorical)", df.columns, key=label + "_x")
+    with col2:
+        y_col = st.selectbox(f"Select Y-axis (numeric)", cols, key=label + "_y")
+
+    if x_col and y_col:
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("#### 📊 Bar Chart (Main Dataset)")
-            fig1, ax1 = plt.subplots()
-            ax1.bar(df[x_col], df[y_col])
-            st.pyplot(fig1)
+            if df[x_col].nunique() <= 30:
+                fig1, ax1 = plt.subplots()
+                ax1.bar(df[x_col], df[y_col])
+                plt.xticks(rotation=45, ha='right')
+                st.pyplot(fig1)
+            else:
+                st.info(f"⚠ Too many unique values in '{x_col}' to display a clean bar chart.")
 
         with col2:
-            st.markdown("#### 🥧 Pie Chart (Main Dataset)")
-            fig2, ax2 = plt.subplots()
-            ax2.pie(df[y_col], labels=df[x_col], autopct="%1.1f%%")
-            ax2.axis("equal")
-            st.pyplot(fig2)
-
-    # 🧮 Analysis for Main Dataset
-    st.markdown("### 🧮 Data Analysis Tools for Main Dataset")
-
-    numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-
-    if numeric_cols:
-        selected_col = st.selectbox(
-            f"Select numeric column (Main Dataset)",
-            numeric_cols,
-            key="main_analysis"
-        )
-
-        b1, b2, b3 = st.columns(3)
-
-        with b1:
-            if st.button("🔼 Sort Asc (Main)"):
-                st.dataframe(df.sort_values(by=selected_col))
-
-        with b2:
-            if st.button("🔽 Sort Desc (Main)"):
-                st.dataframe(df.sort_values(by=selected_col, ascending=False))
-
-        with b3:
-            if st.button("🧮 Max & Min (Main)"):
-                st.write(f"*Max in {selected_col}:* {df[selected_col].max()}")
-                st.write(f"*Min in {selected_col}:* {df[selected_col].min()}")
-
-        threshold = st.number_input(
-            f"Main Dataset: Show rows where {selected_col} >", value=0.0, key="main_gt_input"
-        )
-        if st.button(f"🔍 Filter > {threshold} (Main)"):
-            filtered = df[df[selected_col] > threshold]
-            st.dataframe(filtered)
-    else:
-        st.info("⚠ No numeric columns found in main dataset.")
-
-    st.markdown("### 📥 Download Processed Data")
-    csv_data = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="Download CSV",
-        data=csv_data,
-        file_name='processed_data.csv',
-        mime='text/csv'
-    )
-
-    st.divider()
-
-    # ✅ THEN comes comparison section
-    compare_mode = st.checkbox("🔁 Compare with more datasets?")
-
-    if compare_mode:
-        st.markdown("### 📂 Upload One or More CSVs to Compare")
-        additional_files = st.file_uploader(
-            "Upload additional CSV files", type="csv", accept_multiple_files=True
-        )
-
-        if additional_files:
-            all_datasets = [("Main Dataset", df)]
-            for idx, file in enumerate(additional_files):
-                df_extra = pd.read_csv(file)
-                all_datasets.append((file.name, df_extra))
-
-            st.markdown("## 📊 Side-by-Side Graph + Analysis")
-
-            for name, data in all_datasets:
-                if name == "Main Dataset":
-                    continue  # Skip, already shown above
-
-                st.markdown(f"## 📄 {name}")
-                cols = data.columns.tolist()
-
-                if len(cols) < 2:
-                    st.warning(f"⚠ {name} does not have enough columns to plot.")
-                    continue
-
-                x_col = cols[0]
-                y_col = cols[1]
-
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.markdown("#### 📊 Bar Chart")
-                    fig1, ax1 = plt.subplots()
-                    ax1.bar(data[x_col], data[y_col])
-                    st.pyplot(fig1)
-
-                with col2:
-                    st.markdown("#### 🥧 Pie Chart")
+            if df[x_col].nunique() <= 30:
+                try:
                     fig2, ax2 = plt.subplots()
-                    ax2.pie(data[y_col], labels=data[x_col], autopct="%1.1f%%")
+                    ax2.pie(df[y_col], labels=df[x_col], autopct="%1.1f%%")
                     ax2.axis("equal")
                     st.pyplot(fig2)
+                except Exception as e:
+                    st.warning(f"⚠ Pie chart error: {e}")
+            else:
+                st.info(f"⚠ Too many unique values in '{x_col}' for a meaningful pie chart.")
 
-                # 🧮 Analysis for additional datasets
-                st.markdown("### 🧮 Data Analysis Tools")
+    st.markdown("### 📌 Data Analysis Tools")
+    st.write(f"🔢 Number of rows: {df.shape[0]}")
+    st.write(f"📐 Number of columns: {df.shape[1]}")
+    st.write("📊 Basic statistics:")
+    st.write(df.describe())
 
-                numeric_cols = data.select_dtypes(include=["number"]).columns.tolist()
+    st.markdown("### 🔽 Sorting & Filtering")
+    sort_col = st.selectbox("Sort by column", df.columns, key=label + "_sort")
+    if sort_col:
+        sort_order = st.radio("Order", ["Ascending", "Descending"], key=label + "_order")
+        st.write(df.sort_values(by=sort_col, ascending=(sort_order == "Ascending")).head())
 
-                if numeric_cols:
-                    selected_col = st.selectbox(
-                        f"Select numeric column in {name}",
-                        numeric_cols,
-                        key=f"num_col_{name}"
-                    )
+    st.markdown("### 🔍 Find values above a threshold")
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    num_col = st.selectbox("Choose numeric column", numeric_cols, key=label + "_numfilter")
+    if num_col:
+        threshold = st.number_input("Enter threshold value", key=label + "_threshold")
+        filtered = df[df[num_col] > threshold]
+        st.write(filtered)
 
-                    b1, b2, b3 = st.columns(3)
+    st.markdown("### 📈 Min & Max Finder")
+    min_col = st.selectbox("Column for Min/Max", numeric_cols, key=label + "_minmax")
+    if min_col:
+        st.write("🔽 Minimum Value:")
+        st.write(df[df[min_col] == df[min_col].min()])
+        st.write("🔼 Maximum Value:")
+        st.write(df[df[min_col] == df[min_col].max()])
 
-                    with b1:
-                        if st.button(f"🔼 Sort Asc ({name})", key=f"sort_asc_{name}"):
-                            st.dataframe(data.sort_values(by=selected_col))
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button(f"⬇ Download {label}", csv, file_name=f"{label}.csv", mime="text/csv")
 
-                    with b2:
-                        if st.button(f"🔽 Sort Desc ({name})", key=f"sort_desc_{name}"):
-                            st.dataframe(data.sort_values(by=selected_col, ascending=False))
+# Show main dataset
+if main_file:
+    show_dataset_ui(main_file, "Main Dataset")
 
-                    with b3:
-                        if st.button(f"🧮 Max & Min ({name})", key=f"maxmin_{name}"):
-                            st.write(f"*Max in {selected_col}:* {data[selected_col].max()}")
-                            st.write(f"*Min in {selected_col}:* {data[selected_col].min()}")
-
-                    threshold = st.number_input(
-                        f"{name}: Show rows where {selected_col} >", value=0.0, key=f"gt_input_{name}"
-                    )
-                    if st.button(f"🔍 Filter > {threshold} ({name})", key=f"gt_btn_{name}"):
-                        filtered = data[data[selected_col] > threshold]
-                        st.dataframe(filtered)
-                else:
-                    st.info(f"⚠ No numeric columns found in {name}.")
-
-                if data.shape == df.shape:
-                    try:
-                        st.markdown(f"#### 🔍 Differences vs Main Dataset: {name}")
-                        diff = df.compare(data)
-                        st.dataframe(diff)
-                    except:
-                        st.info("⚠ Columns mismatch — cannot compare.")
+# Show comparison datasets
+if other_files:
+    for i, file in enumerate(other_files):
+        show_dataset_ui(file, f"Dataset{i+1}")
