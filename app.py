@@ -10,17 +10,27 @@ st.markdown("### Upload the Main Dataset")
 main_file = st.file_uploader("Choose the main CSV file", type="csv")
 
 compare_more = st.checkbox("Compare more datasets")
-
 other_files = []
 if compare_more:
     other_files = st.file_uploader("Upload other CSV files", type="csv", accept_multiple_files=True)
 
+# ✅ Efficient large CSV reader
+@st.cache_data
+def read_large_csv(f):
+    chunks = []
+    try:
+        for chunk in pd.read_csv(f, chunksize=100_000, dtype_backend="pyarrow"):
+            chunks.append(chunk)
+        return pd.concat(chunks, ignore_index=True)
+    except Exception as e:
+        return f"Error: {e}"
+
 def show_dataset_ui(file, label):
     st.markdown(f"## {label}")
-    try:
-        df = pd.read_csv(file)
-    except Exception as e:
-        st.error(f"Failed to read {label}: {e}")
+
+    df = read_large_csv(file)
+    if isinstance(df, str):  # Error handling
+        st.error(f"Failed to read {label}: {df}")
         return
 
     st.write("### Dataset Preview", df.head())
@@ -70,7 +80,7 @@ def show_dataset_ui(file, label):
     sort_col = st.selectbox("Sort by column", df.columns, key=label + "_sort")
     if sort_col:
         sort_order = st.radio("Order", ["Ascending", "Descending"], key=label + "_order")
-        st.write(df.sort_values(by=sort_col, ascending=(sort_order == "Ascending")).head())
+        st.write(df.sort_values(by=sort_col, ascending=(sort_order == "Ascending")))
 
     st.markdown("### 🔍 Find values above a threshold")
     numeric_cols = df.select_dtypes(include=[np.number]).columns
